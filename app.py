@@ -11,6 +11,30 @@ st.set_page_config(page_title="Dual-Luciferase Assay Analyzer", layout="wide")
 ROW_LETTERS_384 = list(string.ascii_uppercase[:16])  # A-P
 N_COLS_384 = 24
 
+# Default triplicate layout for a standard 384-well NanoDLR plate, derived from
+# the lab's group-locations reference sheet. Odd rows (A, C, E, G, I, K, M, O)
+# each hold 4 triplicate groups (columns 1-3, 5-7, 9-11, 13-15); column 4/8/12/16
+# and even rows are left ungrouped (blank) by default. Columns 17-24 are unused.
+# Users can freely edit this in the app - it's just a starting point.
+DEFAULT_GROUP_MAP_384 = {
+    "A": ["Group 1", "Group 1", "Group 1", "", "Group 9", "Group 9", "Group 9", "", "Group 17", "Group 17", "Group 17", "", "Group 25", "Group 25", "Group 25", "", "", "", "", "", "", "", "", ""],
+    "B": ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    "C": ["Group 2", "Group 2", "Group 2", "", "Group 10", "Group 10", "Group 10", "", "Group 18", "Group 18", "Group 18", "", "Group 26", "Group 26", "Group 26", "", "", "", "", "", "", "", "", ""],
+    "D": ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    "E": ["Group 3", "Group 3", "Group 3", "", "Group 11", "Group 11", "Group 11", "", "Group 19", "Group 19", "Group 19", "", "Group 27", "Group 27", "Group 27", "", "", "", "", "", "", "", "", ""],
+    "F": ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    "G": ["Group 4", "Group 4", "Group 4", "", "Group 12", "Group 12", "Group 12", "", "Group 20", "Group 20", "Group 20", "", "Group 28", "Group 28", "Group 28", "", "", "", "", "", "", "", "", ""],
+    "H": ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    "I": ["Group 5", "Group 5", "Group 5", "", "Group 13", "Group 13", "Group 13", "", "Group 21", "Group 21", "Group 21", "", "Group 29", "Group 29", "Group 29", "", "", "", "", "", "", "", "", ""],
+    "J": ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    "K": ["Group 6", "Group 6", "Group 6", "", "Group 14", "Group 14", "Group 14", "", "Group 22", "Group 22", "Group 22", "", "Group 30", "Group 30", "Group 30", "", "", "", "", "", "", "", "", ""],
+    "L": ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    "M": ["Group 7", "Group 7", "Group 7", "", "Group 15", "Group 15", "Group 15", "", "Group 23", "Group 23", "Group 23", "", "Group 31", "Group 31", "Group 31", "", "", "", "", "", "", "", "", ""],
+    "N": ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    "O": ["Group 8", "Group 8", "Group 8", "", "Group 16", "Group 16", "Group 16", "", "Group 24", "Group 24", "Group 24", "", "Group 32", "Group 32", "Group 32", "", "", "", "", "", "", "", "", ""],
+    "P": ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+}
+
 
 # ---------------------------------------------------------------------------
 # Parsing
@@ -110,6 +134,15 @@ def blank_group_map(rows, cols) -> pd.DataFrame:
     return pd.DataFrame("", index=rows, columns=cols)
 
 
+def default_group_map(rows, cols) -> pd.DataFrame:
+    """The lab's standard triplicate layout, reindexed to whatever rows/columns
+    were actually detected in the uploaded plate (extra rows/cols are left
+    blank; missing ones are simply not included)."""
+    base = pd.DataFrame(DEFAULT_GROUP_MAP_384).T
+    base.columns = range(1, base.shape[1] + 1)
+    return base.reindex(index=rows, columns=cols, fill_value="")
+
+
 def autofill_by_columns(rows, cols, cols_per_group: int) -> pd.DataFrame:
     """Every row gets the same column grouping: cols_per_group columns per
     group, labeled Group 1, Group 2, ... left to right, repeated identically
@@ -206,7 +239,9 @@ if uploaded is not None:
         "Label which wells belong to the same sample/condition below — you "
         "decide the layout. Type a group name into any well; wells sharing "
         "the same name are averaged together. Leave a well blank to exclude "
-        "it. You can type directly into the grid, or paste in from Excel."
+        "it. You can type directly into the grid, or paste in from Excel. "
+        "The grid starts pre-filled with the lab's standard triplicate "
+        "layout — edit or reset it as needed."
     )
 
     rows, cols = list(ratio.index), list(ratio.columns)
@@ -215,7 +250,7 @@ if uploaded is not None:
     # keyed to the current file so a new upload resets it.
     file_key = getattr(uploaded, "name", "current") + str(uploaded.size)
     if st.session_state.get("_group_map_key") != file_key:
-        st.session_state["_group_map"] = blank_group_map(rows, cols)
+        st.session_state["_group_map"] = default_group_map(rows, cols)
         st.session_state["_group_map_key"] = file_key
 
     with st.expander("Quick-fill by columns (optional starting point)"):
@@ -233,6 +268,8 @@ if uploaded is not None:
                 )
         if st.button("Clear all labels"):
             st.session_state["_group_map"] = blank_group_map(rows, cols)
+        if st.button("Reset to default triplicate layout"):
+            st.session_state["_group_map"] = default_group_map(rows, cols)
 
     edited_group_map = st.data_editor(
         st.session_state["_group_map"],
