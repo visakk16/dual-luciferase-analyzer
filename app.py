@@ -159,7 +159,7 @@ def summarize_groups(value_plate: pd.DataFrame, group_map: pd.DataFrame) -> pd.D
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
-st.title("🔦 Dual-Luciferase Reporter Assay Analyzer")
+st.title("Dual-Luciferase Reporter Assay Analyzer")
 st.caption(
     "Upload a plate-reader export with two stacked 384-well blocks "
     "(NanoLuc® first, then Luc2/Firefly second). The app divides "
@@ -186,15 +186,15 @@ if uploaded is not None:
 
     with tab1:
         st.subheader("Luc2 / NanoLuc ratio")
-        st.dataframe(style_plate(ratio, fmt="{:.3f}", cmap="RdYlGn"), use_container_width=True)
+        st.dataframe(style_plate(ratio, fmt="{:.3f}", cmap="RdYlGn"), width="stretch")
 
     with tab2:
         st.subheader("NanoLuc® (Plate 1, raw luminescence)")
-        st.dataframe(style_plate(nanoluc), use_container_width=True)
+        st.dataframe(style_plate(nanoluc), width="stretch")
 
     with tab3:
         st.subheader("Luc2 / Firefly (Plate 2, raw luminescence)")
-        st.dataframe(style_plate(luc2), use_container_width=True)
+        st.dataframe(style_plate(luc2), width="stretch")
 
     st.divider()
 
@@ -236,7 +236,7 @@ if uploaded is not None:
 
     edited_group_map = st.data_editor(
         st.session_state["_group_map"],
-        use_container_width=True,
+        width="stretch",
         key=f"group_editor_{file_key}",
     )
     st.session_state["_group_map"] = edited_group_map
@@ -250,7 +250,7 @@ if uploaded is not None:
         display_summary = summary.copy()
         for c in ["mean", "std", "sem"]:
             display_summary[c] = display_summary[c].round(4)
-        st.dataframe(display_summary, use_container_width=True)
+        st.dataframe(display_summary, width="stretch")
 
     st.divider()
     sheets = {"Ratio_Luc2_over_NanoLuc": ratio, "NanoLuc_raw": nanoluc, "Luc2_raw": luc2}
@@ -258,7 +258,7 @@ if uploaded is not None:
         sheets["Group_Summary"] = summary.set_index("group")
     excel_bytes = to_excel_bytes(sheets)
     st.download_button(
-        "⬇️ Download results (Excel)",
+        "Download results (Excel)",
         data=excel_bytes,
         file_name="dual_luciferase_ratio_results.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
