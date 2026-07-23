@@ -190,6 +190,27 @@ def summarize_groups(value_plate: pd.DataFrame, group_map: pd.DataFrame) -> pd.D
 
 
 # ---------------------------------------------------------------------------
+# Normalization to a reference group
+# ---------------------------------------------------------------------------
+_GROUP_N_RE = re.compile(r"^group\s*(\d+)$", re.IGNORECASE)
+
+
+def default_reference_for_group(group_label: str, groups_per_block: int = 8) -> str:
+    """For the standard 'Group N' naming scheme, the default reference is the
+    last group in that group's block of `groups_per_block` (e.g. Group 8 is
+    the reference for Groups 1-8, Group 16 for Groups 9-16, etc.) - matching
+    the lab's convention of normalizing to the bottom row of each column
+    block. Returns "" if the label doesn't match the "Group N" pattern."""
+    m = _GROUP_N_RE.match(str(group_label).strip())
+    if not m:
+        return ""
+    n = int(m.group(1))
+    block = (n - 1) // groups_per_block
+    ref_n = block * groups_per_block + groups_per_block
+    return f"Group {ref_n}"
+
+
+# ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
 st.title("Dual-Luciferase Reporter Assay Analyzer")
@@ -289,10 +310,84 @@ if uploaded is not None:
             display_summary[c] = display_summary[c].round(4)
         st.dataframe(display_summary, width="stretch")
 
+        st.divider()
+        st.subheader("Normalize to a reference group")
+        st.caption(
+            "Pick which group each row should be divided by (e.g. the lowest "
+            "dose or a control condition) — average(group) / average(reference "
+            "group). Defaults follow the standard layout: each group is "
+            "normalized to the last group in its column block. Leave blank to "
+            "skip normalization for a row, or edit any reference freely."
+        )
+
+        ref_map_key = file_key
+        default_refs = {
+            g: default_reference_for_group(g) for g in summary["group"]
+        }
+        if st.session_state.get("_ref_map_key") != ref_map_key:
+            st.session_state["_ref_map"] = pd.DataFrame(
+                {
+                    "group": summary["group"],
+                    "reference_group": [default_refs[g] for g in summary["group"]],
+                }
+            )
+            st.session_state["_ref_map_key"] = ref_map_key
+        else:
+            # Preserve existing edits; add any newly-appeared groups with a
+            # sensible default and drop groups that no longer exist.
+            existing = (
+                st.session_state["_ref_map"].set_index("group")["reference_group"].to_dict()
+            )
+            st.session_state["_ref_map"] = pd.DataFrame(
+                {
+                    "group": summary["group"],
+                    "reference_group": [
+                        existing.get(g, default_refs[g]) for g in summary["group"]
+                    ],
+                }
+            )
+
+        edited_ref_map = st.data_editor(
+            st.session_state["_ref_map"],
+            column_config={
+                "group": st.column_config.TextColumn("Group", disabled=True),
+                "reference_group": st.column_config.TextColumn("Reference group"),
+            },
+            hide_index=True,
+            width="stretch",
+            key=f"ref_editor_{file_key}",
+        )
+        st.session_state["_ref_map"] = edited_ref_map
+
+        mean_lookup = summary.set_index("group")["mean"].to_dict()
+        norm_rows = []
+        for _, r in edited_ref_map.iterrows():
+            g = r["group"]
+            ref = str(r["reference_group"]).strip()
+            mean_g = mean_lookup.get(g, np.nan)
+            if ref and ref in mean_lookup:
+                normalized = mean_g / mean_lookup[ref]
+            else:
+                normalized = np.nan
+            norm_rows.append(
+                {"group": g, "reference_group": ref, "normalized": normalized}
+            )
+        normalized_df = pd.DataFrame(norm_rows)
+
+        final = summary.merge(normalized_df, on="group", how="left")
+        display_final = final[
+            ["group", "n", "mean", "sem", "reference_group", "normalized"]
+        ].copy()
+        display_final["mean"] = display_final["mean"].round(4)
+        display_final["sem"] = display_final["sem"].round(4)
+        display_final["normalized"] = display_final["normalized"].round(4)
+        st.dataframe(display_final, width="stretch")
+
     st.divider()
     sheets = {"Ratio_Luc2_over_NanoLuc": ratio, "NanoLuc_raw": nanoluc, "Luc2_raw": luc2}
     if not summary.empty:
         sheets["Group_Summary"] = summary.set_index("group")
+        sheets["Group_Normalized"] = final.set_index("group")
     excel_bytes = to_excel_bytes(sheets)
     st.download_button(
         "Download results (Excel)",

@@ -18,8 +18,13 @@ exports.
   rename, clear, or reset it back to this default at any time.
 - Wells sharing the same group label are averaged together into mean, std,
   SEM, and n.
-- Download the ratio, both raw plates, and the group summary as a single
-  Excel file.
+- **Normalize each group's average to a reference group** (e.g. the lowest
+  dose or a vehicle control): average(group) / average(reference group).
+  Defaults follow the standard layout — each group is normalized to the last
+  group in its column block — but every reference is editable, and you can
+  leave any row blank to skip normalization for it.
+- Download the ratio, both raw plates, group summary, and normalized results
+  as a single Excel file.
 
 ## Running locally
 
@@ -30,7 +35,7 @@ streamlit run app.py
 
 ## Next steps / ideas for later iterations
 
-- Dose-response curve fitting off the group averages
+- Dose-response curve fitting off the normalized values
 - Flagging/excluding low-signal or outlier wells
 - Saving/reloading a plate map layout so you don't have to re-label it every run
 - Support for 96-well plates in addition to 384-well
