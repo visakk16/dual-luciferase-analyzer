@@ -157,6 +157,19 @@ def autofill_by_columns(rows, cols, cols_per_group: int) -> pd.DataFrame:
     return pd.DataFrame(data, index=rows, columns=cols)
 
 
+_GROUP_N_RE = re.compile(r"^group\s*(\d+)$", re.IGNORECASE)
+
+
+def _group_sort_key(label: str):
+    """Sort 'Group N' labels numerically (Group 2 right after Group 1,
+    not after Group 10); anything not matching that pattern sorts after,
+    alphabetically, in the order first encountered."""
+    m = _GROUP_N_RE.match(str(label).strip())
+    if m:
+        return (0, int(m.group(1)), "")
+    return (1, 0, str(label))
+
+
 def summarize_groups(value_plate: pd.DataFrame, group_map: pd.DataFrame) -> pd.DataFrame:
     """Melt the value plate + group map into long form and compute
     n, mean, std, and SEM per non-blank group label."""
@@ -200,13 +213,15 @@ def summarize_groups(value_plate: pd.DataFrame, group_map: pd.DataFrame) -> pd.D
         return pd.Series({"n": n, "mean": mean, "std": std, "sem": sem, "wells": wells})
 
     summary = long.groupby("group", sort=False).apply(_agg).reset_index()
+    summary = summary.sort_values(
+        by="group", key=lambda s: s.map(_group_sort_key)
+    ).reset_index(drop=True)
     return summary
 
 
 # ---------------------------------------------------------------------------
 # Normalization to a reference group
 # ---------------------------------------------------------------------------
-_GROUP_N_RE = re.compile(r"^group\s*(\d+)$", re.IGNORECASE)
 
 
 def default_reference_for_group(group_label: str, groups_per_block: int = 8) -> str:
