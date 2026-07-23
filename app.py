@@ -160,17 +160,31 @@ def autofill_by_columns(rows, cols, cols_per_group: int) -> pd.DataFrame:
 def summarize_groups(value_plate: pd.DataFrame, group_map: pd.DataFrame) -> pd.DataFrame:
     """Melt the value plate + group map into long form and compute
     n, mean, std, and SEM per non-blank group label."""
+    gm = group_map.copy()
+
+    # The plate-map grid returned by st.data_editor can come back with its
+    # column labels coerced to strings (e.g. "1" instead of 1) even though it
+    # was built with integer columns. If the two grids are the same shape
+    # (the normal case - they're always built from the same rows/cols), force
+    # them to share labels positionally so a dtype mismatch can't silently
+    # zero out every match. Only fall back to label-based reindexing if the
+    # shapes actually differ.
+    if gm.shape == value_plate.shape:
+        gm.index = value_plate.index
+        gm.columns = value_plate.columns
+    else:
+        gm = gm.reindex(index=value_plate.index, columns=value_plate.columns, fill_value="")
+
     long = pd.DataFrame(
         {
             "row": np.repeat(value_plate.index.values, len(value_plate.columns)),
             "col": list(value_plate.columns) * len(value_plate.index),
             "value": value_plate.values.flatten(),
-            "group": group_map.reindex(index=value_plate.index, columns=value_plate.columns)
-            .values.flatten(),
+            "group": gm.values.flatten(),
         }
     )
     long["well"] = long["row"].astype(str) + long["col"].astype(str)
-    long["group"] = long["group"].astype(str).str.strip()
+    long["group"] = long["group"].fillna("").astype(str).str.strip()
     long = long[(long["group"] != "") & (long["group"].str.lower() != "nan")]
     long = long.dropna(subset=["value"])
 
